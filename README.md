@@ -2,7 +2,7 @@
 
 **TL;DR** — A ~20 GB, abliterated mini MoE (Thinking Machines, 2026-11-20) runs as a text-only chat assistant on one RTX 5090 (32 GB VRAM) with 63 GB system RAM, 262K context, through an **entirely different engine** than the Strata stack of the 177B MoE next door: [ingine](https://github.com/satellitedown/inkling-2-mini-abliterated-ingine) (satellitedown), a purpose-built C++/CUDA server. It is not the 177B daily driver — it is a different box, a different architecture, and a different engine family, measured on this exact machine and posted with the honest limits attached.
 
-*Numbers below are this box's own measurements (2026-11-22) — the community suite of `tools/strata_bench.py`, client-side timing. See "Reading these numbers" before quoting them.*
+*Numbers below are this box's own measurements (2026-11-22) — the community suite of `tools/strata_bench.py`, client-side timing. See the "honest limits" section before quoting them.*
 
 ---
 
@@ -27,7 +27,7 @@ Start it with `scripts/ingine start` / the `ink` alias; the API is at `http://12
 
 ## Measured performance (this box, 2026-11-22)
 
-Suite 1 (community suite from upstream Strata's `tools/strata_bench.py`, 3 runs per test, medians with ranges; thinking off, temperature 0, `--long`):
+Suite 1 — the community suite from upstream Strata's `tools/strata_bench.py` (3 runs per test, medians with ranges; thinking off, temperature 0, `--long`). _The tool is Strata-framed; the raw artifact carries a Strata-template README — see its honesty banner._
 
 | Configuration | Requests | Decode tok/s | First token (s) | Prompt tok/s |
 |---|---|---|---|---|
@@ -37,7 +37,7 @@ Suite 1 (community suite from upstream Strata's `tools/strata_bench.py`, 3 runs 
 | 32K prompt (fresh) | 3 | not measured | **2.77** (2.77–2.77) | not measured |
 | agent session (5 turns, ~11.6K tok) | 3 sessions | **771.9** (375.9–872.2) | **0.19** (0.18–0.19) | not measured |
 
-From the same run (agent session, earlier-turn processing): the suite reads every earlier turn back from context — ~25.1K tokens read per session (≈2500 tokens of earlier turns the cache did not hold; the tool reads no cached-token usage deltas from ingine, so 0% "cache hit" is a reporting gap, not an engine failure).
+From the same run (agent session, earlier-turn processing): the tool reports the full earlier-turn context being read again per session — ~25.1K tokens (≈25.1K reported as "read" per session, and the tool's "reused tokens" breakdown is empty). There is no cached-token usage from ingine to split that into cached vs. fresh, so the "0.0 % cache hit" figure in the raw artifact is a reporting gap, not a measured fact.
 
 Raw artifact: [`results/suite-2026-11-22-rtx5090/`](results/suite-2026-11-22-rtx5090/) (`README.md` + `results.json`).
 
@@ -74,10 +74,10 @@ Read this honestly: different engines, different models, different timing source
 
 ## Provenance
 
-- Root repo reviewed: [satellitedown/inkling-2-mini-abliterated-ingine](https://github.com/satellitedown/inkling-2-mini-abliterated-ingine) at commit `306eaa8` (tagged nothing; README results are what ships, no release tag).
-- Engine built locally from source (80 objects, ~4 min on 24 threads).
-- Model: abliterated `model-00001-of-00004.safetensors` etc. from the pinned Hugging Face release `afd44de` (~20.2 GB, per-file SHA-256 verified on download).
-- Suite ran against the already-running `ink` server (same tool as upstream Strata's community suite; the tool used here is a byte-identical copy of `tools/strata_bench.py` with three placement-only patches: model-id, `stream_options.include_usage`, and the `/health` service-name preflight — the tool refuses to run without these patches against this server).
+- Tree reviewed: [satellitedown/inkling-2-mini-abliterated-ingine](https://github.com/satellitedown/inkling-2-mini-abliterated-ingine) at commit `306eaa8` (no release tag; the repo README is what ships).
+- Engine built locally from source — 62 ninja steps (CXX/CUDA/main), producing the 37.5 MB `ingine-serve` binary. Build time is not recorded here; a local source build takes minutes, not hours.
+- Model: abliterated single-shard `model-00001-of-00001.safetensors` (~19 GB on disk) plus tokenizer/chat-template/config/abliteration support files from the pinned Hugging Face release `afd44de` (~20.2 GB download; per-file SHA-256 verified on download).
+- The suite ran against the already-running `ink` server (same tool family as upstream Strata's community suite; the tool used here is a derived copy of `tools/strata_bench.py` — regenerated on every run so it cannot drift, and it fails closed if the upstream tool changes — with three placement-only patches: (1) hardcoded model-id → `inkling-2-mini-abliterated` with `stream_options.include_usage=true` (ingine validates this id and only streams usage if asked), (2) model-name fallback to the `/v1/models` id (ingine has no `/v1/status`/`/metrics`), (3) the preflight's `service=="strata"` check relaxed to any `/health` 200 (ingine labels itself differently). No functionality is otherwise changed.
 
 ## Credits
 
